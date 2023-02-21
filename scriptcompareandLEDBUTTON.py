@@ -50,7 +50,7 @@ dynamodb = boto3.client('dynamodb', region_name='eu-west-1')
 #creating the function to send image and metadata to the s3
 def sendtos3(Image, Date, Time, Name, studentNo, result):
     file = open(Image,'rb')
-    object = s3.Object('prj300-website', Image)
+    object = s3.Object('facrectestjack', Image)
     ret = object.put(Body=file, Metadata={'Date': Date,'Time': Time,'FullName':Name, 'StudentNo':studentNo, 'Match':result})
 
 #camport variable can be changed depending on which camera to be used eg 0-1
