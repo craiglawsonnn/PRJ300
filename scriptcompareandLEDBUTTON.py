@@ -25,9 +25,10 @@ GPIO.setmode (GPIO.BOARD)
 GPIO.setwarnings(False)
 
 redLED = 18
+relay = 13
 GPIO.setup(redLED, GPIO.OUT)
 GPIO.setup(32, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
+GPIO.setup(relay, GPIO.OUT)
 
 devIP = socket.gethostbyname(socket.gethostname())
 devMAC = (':'.join(re.findall('..', '%012x' % uuid.getnode())))
@@ -50,7 +51,7 @@ dynamodb = boto3.client('dynamodb', region_name='eu-west-1')
 #creating the function to send image and metadata to the s3
 def sendtos3(Image, Date, Time, Name, studentNo, result):
     file = open(Image,'rb')
-    object = s3.Object('facrectestjack', Image)
+    object = s3.Object('prj300-website', Image)
     ret = object.put(Body=file, Metadata={'Date': Date,'Time': Time,'FullName':Name, 'StudentNo':studentNo, 'Match':result})
 
 #camport variable can be changed depending on which camera to be used eg 0-1
@@ -62,7 +63,7 @@ counter = 0 #debug
 failCounter = 0 #how many fails while the code has been running 
 
 # Main loop to run the code continuously
-while failCounter <= maxFailure:
+while failCounter < maxFailure:
   failureWarning = "Attempts left: {}".format(str(maxFailure - failCounter))
   print(counter)
   GPIO.output(redLED, GPIO.LOW)
@@ -75,7 +76,7 @@ while failCounter <= maxFailure:
   inputState = GPIO.input(32)
   print("button initialized")
 
-  while inputState == 0:
+  if inputState == 0:
     print("BUTTON PRESSED")
     inputState = GPIO.input(32)
     cam = cv2.VideoCapture(cam_port)
@@ -141,43 +142,24 @@ while failCounter <= maxFailure:
         for match in response['FaceMatches']:
             matchconfidence = round(match['Face']['Confidence'], 4 )
             print(matchconfidence)
-            output = "AUTHORIZED with certainty of {}".format(matchconfidence)
-            lcd.clear()
-            lcd.text(str(output),1)
+            authorizedMsg = "AUTHORIZED with certainty of {}".format(matchconfidence)
+            
+            GPIO.output(relay,GPIO.HIGH)
+            print("ONN")
+            time.sleep(5)
+            GPIO.output(relay,GPIO.LOW)
+            print("OFF")
+            time.sleep(5)
 
-            ########################################
-            #WHERE TO PUT OUTPUT OF SIGNAL FOR DOOR#
-            ########################################
+            time.sleep(3)
+            lcd.clear()
+            lcd.text(str(authorizedMsg),1)
 
             time.sleep(.5)
             print("Slept for a second")
-
-            # #uses the RekognitionId to find the face in dynamo
-            # face = dynamodb.get_item(
-            #     TableName='Prj300',  
-            #     Key={'RekognitionId': {'S': match['Face']['FaceId']}}
-            #     )
-            # #checks if there is a face, get the metadata e.g name and student no.
-            # print("Checking face")
-            # if 'Item' in face:
-            #     personName=face['Item']['FullName']['S']
-            #     StudentNumber= face['Item']['StudentNo']['S']
-            #     print ("Found Person: Name:", face['Item']['FullName']['S'], ", Student No:", face['Item']['StudentNo']['S'])
-            #     found = True
-            #     #calling function to send image and metadata to s3 bucket
-            #     sendtos3(image_name +'.jpg', entry_date, entry_time, personName, StudentNumber, str(matchconfidence))
-            #     continue
-            # if not found:
-            #     print("Person cannot be recognized")
-            #     #clearing lcd 
-            #     lcd.clear()
-            #     lcd.text = ("Unauthorized User", 1)
-            #     print("about to pause")
-            #     pause()
-            #     print("Gone past the pause")
-            #     continue
             
             s3 = boto3.resource('s3')
+            
             #deletes the image from the pi
             try:
                 os.remove(image_name+".jpg")
