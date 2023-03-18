@@ -9,7 +9,7 @@ s3 = boto3.resource('s3')
 
 def sendtos3(Image, Date, Time, Name, studentNo, result):
     file = open(Image,'rb')
-    object = s3.Object('prj300-website', Image)
+    object = s3.Object('logging-data-bucket-prj300', Image)
     ret = object.put(Body=file, Metadata={'Date': Date,'Time': Time,'FullName':Name, 'StudentNo':studentNo, 'Match':result})
     
 
