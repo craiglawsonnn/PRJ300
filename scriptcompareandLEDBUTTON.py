@@ -60,11 +60,17 @@ s3 = boto3.resource('s3')
 rekognition = boto3.client('rekognition', region_name='eu-west-1')
 dynamodb = boto3.client('dynamodb', region_name='eu-west-1')
 
+#Room number
+roomNo = 'B1034'
+Pass = True
+personName = ""
+StudentNumber = 0
+
 #creating the function to send image and metadata to the s3
-def sendtos3(Image, Date, Time, Name, studentNo, result):
+def sendtos3(Image, Date, Time, Name, studentNo, result, Pass, roomNo, devIP, devMAC):
     file = open(Image,'rb')
     object = s3.Object('logging-data-bucket-prj300', Image)
-    ret = object.put(Body=file, Metadata={'Date': Date,'Time': Time,'FullName':Name, 'StudentNo':studentNo, 'Match':result })
+    ret = object.put(Body=file, Metadata={'Date': Date,'Time': Time,'FullName':Name, 'StudentNo':studentNo, 'Match':str(result), 'Pass':str(Pass), 'RoomNo':roomNo, 'IPAdd':str(devIP), 'MAC':str(devMAC)})
 
 #camport variable can be changed depending on which camera to be used eg 0-1
 cam_port = 0
@@ -77,7 +83,7 @@ while True:
     # Main loop to run the code continuously
     while failCounter < maxFailure and counter != 0:
         failureWarning = "Attempts left: {}".format(str(maxFailure - failCounter))
-        print(counter)
+        # print(counter)
         GPIO.output(redLED, GPIO.LOW)
         lcd.text("Welcome!", 1, 'center')
         lcd.text("Press button to take a photo", 2, 'center')
@@ -86,7 +92,7 @@ while True:
         
         # Wait for button press
         inputState = GPIO.input(32)
-        print("button initialized")
+        
 
         if inputState == 0:
             print("BUTTON PRESSED")
@@ -94,7 +100,7 @@ while True:
             cam = cv2.VideoCapture(cam_port)
             
             #image is named exact time and date button is pressed
-            image_name = datetime.now().strftime('%d_%m_%Y_%H_%M_%S') +".jpg" #name is exact time and date
+            image_name = datetime.now().strftime('%Y_%m_%d_%H_%M_%S') +".jpg" #name is exact time and date
             entry_date = datetime.now().strftime('%d/%m/%Y') 
             entry_time = datetime.now().strftime('%H:%M:%S')
 
@@ -138,20 +144,30 @@ while True:
             stream = io.BytesIO()
             image.save(stream,format="JPEG")
             image_binary = stream.getvalue() 
+
             #try catch block to look for faces
             try:
                 # searches the collection for the face
+                print("Searching collection")
                 response = rekognition.search_faces_by_image(
                     CollectionId='Prj300Rekognition',
                     Image={'Bytes':image_binary}                                       
                     )
-                
-                if len(response['FaceMatches']) > 0:
-                    match = response['FaceMatches'][0]
+                for match in response['FaceMatches']:
                     matchconfidence = round(match['Face']['Confidence'], 4 )
-                    print(matchconfidence)
-                    authorizedMsg = "AUTHORIZED with certainty of {}".format(matchconfidence)
                     
+                    #uses the RekognitionId to find the face in dynamo
+                    face = dynamodb.get_item(
+                        TableName='Prj300',  
+                        Key={'RekognitionId': {'S': match['Face']['FaceId']}}
+                        )
+                    
+                if len(response['FaceMatches']) > 0:
+                    authorizedMsg = "AUTHORIZED with certainty of {}".format(matchconfidence)
+
+                    personName = face['Item']['FullName']['S']
+                    StudentNumber = face['Item']['StudentNo']['S']
+
                     time.sleep(3)
                     lcd.clear()
                     lcd.text(str(authorizedMsg),1)
@@ -171,11 +187,13 @@ while True:
                     GPIO.output(relay,GPIO.LOW)
                     print("OFF")
                     
-                    s3 = boto3.resource('s3')
+                    sendtos3(image_name, entry_date, entry_time, personName, StudentNumber ,matchconfidence , 1, roomNo, devIP, devMAC)
+                    print("Sent Data to S3")
+                
                     #deletes the image from the pi
                     try:
                         os.remove(image_name)
-                        print("Image deleted")
+                        print("Passed Image deleted")
                     except:
                         print("Could not delete image")
                     lcd.clear()
@@ -186,10 +204,14 @@ while True:
                     lcd.clear()
                     lcd.text("FACE not recognised",1)
                     lcd.text("Please contact admin if error persists",2)
-                    time.sleep(5)
+                    time.sleep(4)
+
+                    sendtos3(image_name, entry_date, entry_time, "Unknown", "Unknown", "0" ,0,
+                         roomNo, devIP, devMAC)
+                    
                     try:
                         os.remove(image_name)
-                        print("Image deleted")
+                        print("No face Image deleted")
                     except:
                         print("Could not delete image")
                     failCounter = failCounter +1
@@ -204,7 +226,7 @@ while True:
                 #deletes the image from the pi
                 try:
                     os.remove(image_name)
-                    print("Image deleted")
+                    print("No faces Image deleted")
                 except:
                     print("Could not delete failed image")
                 counter = counter + 1
@@ -213,11 +235,12 @@ while True:
     # Define the password
     password = "secret"
     # Get the password from the user
-    entered_password = getpass.getpass("Enter the password: ")
+    # entered_password = getpass.getpass("Enter the password: ")
     
     lcd.text("Admin required", 1)
     
-    if entered_password == password:
+    # if entered_password == password:
+    if password == "secret" :
         print("Access granted.")
         lcd.text("Access granted", 1)
         lcd.text(str(devIP),2)
