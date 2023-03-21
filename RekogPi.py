@@ -155,7 +155,7 @@ while True:
                     )
                 for match in response['FaceMatches']:
                     matchconfidence = round(match['Face']['Confidence'], 4 )
-                    
+                    print(matchconfidence)
                     #uses the RekognitionId to find the face in dynamo
                     face = dynamodb.get_item(
                         TableName='Prj300',  
@@ -167,7 +167,10 @@ while True:
 
                     personName = face['Item']['FullName']['S']
                     StudentNumber = face['Item']['StudentNo']['S']
-
+                    print(personName)
+                    
+                    print(devIP)
+                    print(devMAC)
                     time.sleep(3)
                     lcd.clear()
                     lcd.text(str(authorizedMsg),1)
@@ -235,12 +238,11 @@ while True:
     # Define the password
     password = "secret"
     # Get the password from the user
-    # entered_password = getpass.getpass("Enter the password: ")
+    entered_password = getpass.getpass("Enter the password: ")
     
     lcd.text("Admin required", 1)
     
-    # if entered_password == password:
-    if password == "secret" :
+    if entered_password == password:
         print("Access granted.")
         lcd.text("Access granted", 1)
         lcd.text(str(devIP),2)
